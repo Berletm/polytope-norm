@@ -43,6 +43,8 @@ POINTS = [
     (-6, 6, 7)  # b
 ]
 
+CENTROID = np.array([0, 0, 0], dtype=np.float32)
+
 class Vec3:
     def __init__(self, vec: Tuple[int|float]):
         self.x = vec[0]
@@ -51,10 +53,22 @@ class Vec3:
     
     def to_list(self) -> List:
         return [self.x, self.y, self.z]
-        
+    
+    def to_numpy(self) -> np.ndarray:
+        return np.array([self.x, self.y, self.z], dtype=np.float32)
+
+class Plane:
+    def __init__(self, normal: Vec3, intercept: float):
+        self.normal = normal
+        self.d = intercept
+    
+    def __call__(self, v: Vec3) -> float:
+        return np.dot(self.normal.to_numpy(), v.to_numpy()) + self.d
+    
 class Facet:
-    def __init__(self, points: Tuple[Vec3]):
+    def __init__(self, points: Tuple[Vec3], plane: Plane):
         self.points = points
+        self.plane  = plane
     
 class Quadrant:
     def __init__(self, facets: List[Facet]):
@@ -67,6 +81,7 @@ class W:
         self.facets:    List[Facet]    = []
         self.quadrants: List[Quadrant] = []
         self.vertices:  List[Vec3]     = []
+        self.planes:    List[Plane]    = []
          
         self.__create_W()
     
@@ -77,13 +92,27 @@ class W:
             
             vertices = [Vec3((s1 * v[0], s2 * v[1], s3 * v[2])) for v in self.base_vertices]
             
-            facets   = [Facet((vertices[f[0] - 1], vertices[f[1] - 1], vertices[f[2] - 1])) for f in FACETS]
-            
+            facets = []
+            for f in FACETS:
+                points = (vertices[f[0] - 1], vertices[f[1] - 1], vertices[f[2] - 1])
+                v1 = points[1].to_numpy() - points[0].to_numpy()
+                v2 = points[2].to_numpy() - points[0].to_numpy()
+                normal = np.cross(v1, v2)
+                
+                check_vec = CENTROID - points[0].to_numpy()
+                
+                normal = -normal if np.dot(normal, check_vec) > 0 else normal 
+                
+                unit_normal = normal / np.linalg.norm(normal)
+                intercept = -np.dot(unit_normal, points[0].to_numpy())
+                plane = Plane(unit_normal, intercept)
+                facets.append(Facet(points, plane))
+                
             self.facets.extend(facets)
             self.quadrants.append(Quadrant(facets))
             self.vertices.extend(vertices)
     
-    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES) -> None:
+    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES, render_points=True) -> None:
         fig = plt.figure(figsize=(24, 8))
         ax  = plt.axes(projection="3d")
         
@@ -100,8 +129,15 @@ class W:
             
                     verts = np.array(verts)
         
-        points = np.array(POINTS)
-        ax.scatter(points[:, 0], points[:, 1], c="black", s=25)
+        self.__draw_normals(ax, quadrants_indices)
+        self.__draw_planes(ax, [0], [0])
+        
+        if render_points:
+            points = np.array(POINTS)
+            ax.scatter(*points[0], c="black", s=25)
+            ax.scatter(*points[1], c="black", s=25)
+            ax.text(*points[0] + 0.5, "a", color="red", fontsize=12)
+            ax.text(*points[1] + 0.5, "b", color="blue", fontsize=12)
         
         ax.set_aspect('equal')
         ax.axis("off")
@@ -125,6 +161,49 @@ class W:
             label_pos[i] = axis_length * 1.1
             ax.text(*label_pos, labels[i], color=colors[i], fontsize=24, fontweight='bold')
     
+    def __draw_normals(self, ax: plt.Axes, quadrants=ALL_QUADRANTS_INDICES) -> None:
+        normals = []
+        for idx, q in enumerate(self.quadrants):
+            if idx in quadrants:
+                for f in q.facets:
+                    normal = f.plane.normal
+                    center = np.mean([p.to_numpy() for p in f.points], axis=0)
+                    
+                    normals.append((normal, center))
+        
+        centers = np.array([n[1] for n in normals])
+        vectors = np.array([n[0] for n in normals])
+        
+        ax.quiver(
+            centers[:, 0], centers[:, 1], centers[:, 2],
+            vectors[:, 0], vectors[:, 1], vectors[:, 2],
+            length=1.0,
+            color="black",
+            arrow_length_ratio=0.5,
+            linewidth=2
+        )
+        
+    
+    def __draw_planes(self, ax: plt.Axes, quadrants=ALL_QUADRANTS_INDICES, facets=None) -> None:
+        q_counter = 0
+        f_counter = 0
+        for q in self.quadrants:
+            if q_counter in quadrants:
+                for f in q.facets:
+                    if facets is None or f_counter in facets:
+                        nx, ny, nz = f.plane.normal
+                        d = f.plane.d
+                        
+                        x = np.linspace(-10, 10, 20)
+                        y = np.linspace(-10, 10, 20)
+                        X, Y = np.meshgrid(x, y)
+                        
+                        Z = -(nx * X + ny * Y + d) / nz
+                        ax.plot_surface(X, Y, Z, color="pink", alpha=0.5)
+                        f_counter += 1
+                q_counter += 1
+
+
     def dump_tex_tables(self, pth: str) -> None:
         pth2vertices  = os.path.join(pth, "vertices.tex")
         pth2allvertices  = os.path.join(pth, "all_vertices.tex")
@@ -157,6 +236,14 @@ class W:
             f.write(r'        \bottomrule' + '\n')
             f.write(r'    \end{tabular}' + '\n')
             f.write(r'\end{table}' + '\n')
+    
+    def __fraction_format(self, value: float, numerator:int = 33, denominator:int = 5, tol: float = 1e-9) -> str:
+        target = numerator / denominator
+        if abs(value - target) < tol:
+            return r"$\frac{" + str(numerator) + "}{" + str(denominator) + "}$"
+        elif abs(value + target) < tol:
+            return r"$-\frac{" + str(numerator) + "}{" + str(denominator) + "}$"
+        return str(value)
         
     def __dump_all_vertices(self, pth: str) -> None:
         lets = ["a", "b", "c"]
@@ -176,12 +263,11 @@ class W:
                 for j in range(l, r, 1):
                     v = self.vertices[j]
                     
-                    x = r"$\frac{33}{5}$" if (abs(float(v.x) - float(33/5)) < 1e-9 or abs(float(-v.x) - float(33/5)) < 1e-9) else v.x
-                    y = r"$\frac{171}{32}$" if (abs(float(v.y) - float(171/32)) < 1e-9 or abs(float(-v.y) - float(171/32)) < 1e-9) else v.y
-                    z = r"$\frac{107}{13}$" if (abs(float(v.z) - float(107/13)) < 1e-9 or abs(float(-v.z) - float(107/13)) < 1e-9) else v.z
+                    x = self.__fraction_format(v.x, 33, 5)
+                    y = self.__fraction_format(v.y, 171, 32)
+                    z = self.__fraction_format(v.z, 107, 13)
                     
-                    
-                    f.write(f"            {j} & {x} & {y} & {z} \\\\\n")
+                    f.write(f"            {j + 1} & {x} & {y} & {z} \\\\\n")
                 
                 f.write(r"        \end{tabular}" + "\n")
                 f.write(r'            \caption{Вершины группы №' + f"{i}" + r"}" + "\n")
@@ -203,7 +289,7 @@ class W:
 def main() -> None:
     cover = W()
     
-    cover.draw_W([1])
+    cover.draw_W(render_points=False)
     cover.dump_tex_tables(REPORT_PTH)
 
 
