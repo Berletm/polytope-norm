@@ -7,6 +7,7 @@ from typing import List, Tuple
 import os
 
 REPORT_PTH = R"../report"
+IMAGES_PTH = R"../report/images"
 
 # var2
 VERTICES = [
@@ -112,8 +113,8 @@ class W:
             self.quadrants.append(Quadrant(facets))
             self.vertices.extend(vertices)
     
-    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES, render_points=True) -> None:
-        fig = plt.figure(figsize=(24, 8))
+    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES, render_normals=True, render_planes=True, render_points=True, plot=True) -> plt.Axes:
+        fig = plt.figure()
         ax  = plt.axes(projection="3d")
         
         self.__draw_axis(ax)
@@ -129,8 +130,10 @@ class W:
             
                     verts = np.array(verts)
         
-        self.__draw_normals(ax, quadrants_indices)
-        self.__draw_planes(ax, [0], [0])
+        if render_normals:
+            self.__draw_normals(ax, quadrants_indices)
+        if render_planes:
+            self.__draw_planes(ax, [0], [0])
         
         if render_points:
             points = np.array(POINTS)
@@ -141,9 +144,12 @@ class W:
         
         ax.set_aspect('equal')
         ax.axis("off")
-        plt.show()
+        if plot:
+            plt.show()
+        else:
+            return ax
         
-    def __draw_axis(self, ax: plt.Axes) -> None:
+    def __draw_axis(self, ax: plt.Axes, label_axis=False) -> None:
         origin = [0, 0, 0]
         axis_length = 20
         colors = ['red', 'green', 'blue']
@@ -157,10 +163,11 @@ class W:
             
             ax.quiver(*origin, *direction, color=colors[i], linewidth=2, arrow_length_ratio=0.1, alpha=0.8)
             
-            label_pos = [0, 0, 0]
-            label_pos[i] = axis_length * 1.1
-            ax.text(*label_pos, labels[i], color=colors[i], fontsize=24, fontweight='bold')
-    
+            if label_axis:
+                label_pos = [0, 0, 0]
+                label_pos[i] = axis_length * 1.1
+                ax.text(*label_pos, labels[i], color=colors[i], fontsize=24, fontweight='bold')
+        
     def __draw_normals(self, ax: plt.Axes, quadrants=ALL_QUADRANTS_INDICES) -> None:
         normals = []
         for idx, q in enumerate(self.quadrants):
@@ -199,7 +206,7 @@ class W:
                         X, Y = np.meshgrid(x, y)
                         
                         Z = -(nx * X + ny * Y + d) / nz
-                        ax.plot_surface(X, Y, Z, color="pink", alpha=0.5)
+                        ax.plot_surface(X, Y, Z, color="gray", alpha=0.5)
                         f_counter += 1
                 q_counter += 1
 
@@ -207,21 +214,21 @@ class W:
     def dump_tex_tables(self, pth: str) -> None:
         pth2vertices  = os.path.join(pth, "vertices.tex")
         pth2allvertices  = os.path.join(pth, "all_vertices.tex")
+        pth2uniquevertices  = os.path.join(pth, "uniq_vertices.tex")
+        pth2facets = os.path.join(pth, "facets.tex")
         pth2quadrants = os.path.join(pth, "quadrants.tex")
         
         self.__dump_base_vertices(pth2vertices)
         self.__dump_all_vertices(pth2allvertices)
-        self.__dump_unique_vertices("1231")
-        
+        self.__dump_unique_vertices(pth2uniquevertices)
+        self.__dump_facets(pth2facets)
+    
     def __dump_base_vertices(self, pth: str) -> None:
         with open(pth, 'w+', encoding='utf-8') as f:
             f.write(r'\begin{table}[h]' + '\n')
             f.write(r'    \centering' + '\n')
-            
-            f.write(r'    \caption{Вершины первого квадранта}' + '\n')
             f.write(r'    \begin{tabular}{c||ccc}' + '\n')
             f.write(r'        \toprule' + '\n')
-            
             f.write(r'        \textbf{№} & \textbf{$x$} & \textbf{$y$} & \textbf{$z$} \\'+ '\n')
             f.write(r'        \midrule' + '\n')
             
@@ -235,6 +242,7 @@ class W:
             
             f.write(r'        \bottomrule' + '\n')
             f.write(r'    \end{tabular}' + '\n')
+            f.write(r'    \caption{Вершины первого квадранта}' + '\n')
             f.write(r'\end{table}' + '\n')
     
     def __fraction_format(self, value: float, numerator:int = 33, denominator:int = 5, tol: float = 1e-9) -> str:
@@ -246,7 +254,6 @@ class W:
         return str(value)
         
     def __dump_all_vertices(self, pth: str) -> None:
-        lets = ["a", "b", "c"]
         with open(pth, 'w+', encoding='utf-8') as f:
             f.write(r'\begin{table}[h]' + '\n')
             f.write(r'    \centering' + '\n')
@@ -267,11 +274,10 @@ class W:
                     y = self.__fraction_format(v.y, 171, 32)
                     z = self.__fraction_format(v.z, 107, 13)
                     
-                    f.write(f"            {j + 1} & {x} & {y} & {z} \\\\\n")
+                    row = f"            {j + 1} & {x} & {y} & {z} \\\\\n"
+                    f.write(row)
                 
                 f.write(r"        \end{tabular}" + "\n")
-                f.write(r'            \caption{Вершины группы №' + f"{i}" + r"}" + "\n")
-                f.write(r"            \label{tab:sub_" + f"{lets[i-1]}" "}" + "\n")
                 f.write(r"    \end{subtable}" + "\n")
                 if j != 3:
                     f.write(r"    \hfill" + "\n")
@@ -279,17 +285,95 @@ class W:
                 l += 16
                 r += 16
             f.write(r"    \caption{Все вершины многогранника}" + "\n")
-            f.write(r"    \label{tab:main}" + "\n")
             f.write(r"\end{table}" + "\n")
-    
+            
     def __dump_unique_vertices(self, pth: str) -> None:
-        pass
-    
+        unique_vertices = []
+        seen_coords = set()
+        
+        for v in self.vertices:
+            x = self.__fraction_format(v.x, 33, 5)
+            y = self.__fraction_format(v.y, 171, 32)
+            z = self.__fraction_format(v.z, 107, 13)
+            
+            if (x, y, z) not in seen_coords:
+                seen_coords.add((x, y, z))
+                unique_vertices.append((x, y, z))
+
+        mid_point = len(unique_vertices) // 2
+        parts = [unique_vertices[:mid_point], unique_vertices[mid_point:]]
+
+        with open(pth, 'w+', encoding='utf-8') as f:
+            f.write(r'\begin{table}[h]' + '\n')
+            f.write(r'    \centering' + '\n')
+
+            for i, part in enumerate(parts):
+                if not part and i > 0:
+                    continue
+
+                f.write(r'    \begin{subtable}{0.45\textwidth}' + '\n')
+                f.write(r'        \centering' + '\n')
+                f.write(r'        \begin{tabular}{c||ccc}' + '\n')
+                f.write(r'            \toprule' + '\n')
+                f.write(r'            \textbf{№} & \textbf{$x$} & \textbf{$y$} & \textbf{$z$} \\'+ '\n')
+                f.write(r'            \midrule' + '\n') 
+                
+                start_num = 0 if i == 0 else mid_point
+
+                for k, (x, y, z) in enumerate(part):
+                    row_num = start_num + k + 1
+                    f.write(f"            {row_num} & {x} & {y} & {z} \\\\\n")
+                
+                f.write(r'            \bottomrule' + '\n')
+                f.write(r'        \end{tabular}' + '\n')
+                f.write(r'    \end{subtable}' + '\n')
+
+            f.write(r'    \caption{Уникальные вершины многогранника}' + '\n')
+            f.write(r'\end{table}' + '\n')
+   
+    def __dump_facets(self, pth: str) -> None:
+        with open(pth, 'w+', encoding='utf-8') as f:
+            f.write(r'\begin{table}[h]' + '\n')
+            f.write(r'    \centering' + '\n')
+            f.write(r'    \begin{subtable}{0.45\textwidth}' + '\n')
+            f.write(r'        \centering' + '\n')
+            f.write(r'        \begin{tabular}{c||ccc}' + '\n')
+            f.write(r'            \toprule' + '\n')
+            f.write(r'            \textbf{№} & \textbf{$v_1$} & \textbf{$v_2$} & \textbf{$v_3$} \\'+ '\n')
+            f.write(r'            \midrule' + '\n') 
+            for idx, part in enumerate(FACETS, start=1):
+                i, j, k = part
+                f.write(f"            {idx} & {i} & {j} & {k} \\\\\n")
+                
+            f.write(r'            \bottomrule' + '\n')
+            f.write(r'        \end{tabular}' + '\n')
+            f.write(r'    \end{subtable}' + '\n')
+            f.write(r'    \caption{Правила построения граней в квадрантах}' + '\n')
+            f.write(r'\end{table}' + '\n')
     
 def main() -> None:
     cover = W()
+
+    ax = cover.draw_W(quadrants_indices=[0], render_normals=False, render_planes=False, render_points=False, plot=False)
     
-    cover.draw_W(render_points=False)
+    ax.view_init(10, 40, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "quadrant1.png"), dpi=1000, bbox_inches='tight')
+    
+    ax = cover.draw_W(render_normals=False, render_planes=False, render_points=False, plot=False)
+    ax.view_init(25, 35, 0)
+    
+    ax = cover.draw_W(render_normals=True, render_planes=False, render_points=False, plot=False)
+    ax.view_init(0, 45, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-normals.png"), dpi=1000, bbox_inches='tight')
+    
+    ax = cover.draw_W(render_normals=True, render_planes=True, render_points=False, plot=False)
+    ax.view_init(10, 135, 0)
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 15)
+    ax.set_zlim(0, 15)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-plane.png"), dpi=1000, bbox_inches='tight')
+    
+    
     cover.dump_tex_tables(REPORT_PTH)
 
 
