@@ -67,9 +67,10 @@ class Plane:
         return np.dot(self.normal.to_numpy(), v.to_numpy()) + self.d
     
 class Facet:
-    def __init__(self, points: Tuple[Vec3], plane: Plane):
-        self.points = points
-        self.plane  = plane
+    def __init__(self, points: Tuple[Vec3], plane: Plane, biorthogonal: Tuple[Vec3]):
+        self.points       = points
+        self.plane        = plane
+        self.biorthogonal = biorthogonal
     
 class Quadrant:
     def __init__(self, facets: List[Facet]):
@@ -79,12 +80,14 @@ class W:
     def __init__(self, initial_vertices:List = VERTICES):
         self.base_vertices: List = initial_vertices
         
-        self.facets:    List[Facet]    = []
-        self.quadrants: List[Quadrant] = []
-        self.vertices:  List[Vec3]     = []
-        self.planes:    List[Plane]    = []
+        self.facets:    List[Facet]       = []
+        self.quadrants: List[Quadrant]    = []
+        self.vertices:  List[Vec3]        = []
+        self.planes:    List[Plane]       = []
+        self.projected_points: List[np.ndarray] = []
          
         self.__create_W()
+        self.__project_points()
     
         
     def __create_W(self) -> None:
@@ -107,23 +110,33 @@ class W:
                 unit_normal = normal / np.linalg.norm(normal)
                 intercept = -np.dot(unit_normal, points[0].to_numpy())
                 plane = Plane(unit_normal, intercept)
-                facets.append(Facet(points, plane))
+                biorthogonal = self.__calc_biorthogonal(points)
+                facets.append(Facet(points, plane, biorthogonal))
                 
             self.facets.extend(facets)
             self.quadrants.append(Quadrant(facets))
             self.vertices.extend(vertices)
     
-    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES, render_normals=True, render_planes=True, render_points=True, plot=True) -> plt.Axes:
+    def draw_W(self, quadrants_indices=ALL_QUADRANTS_INDICES, 
+               render_normals=True, 
+               render_planes=True, 
+               render_points=True, 
+               render_cones=False,
+               render_axis=True,
+               origin_proj=False,
+               proj=False,
+               plot=True) -> plt.Axes:
         fig = plt.figure()
         ax  = plt.axes(projection="3d")
         
-        self.__draw_axis(ax)
+        if render_axis:
+            self.__draw_axis(ax)
                     
         for i, q in enumerate(self.quadrants):
             if i in quadrants_indices:
                 for f in q.facets:
                     verts = [p.to_list() for p in f.points]
-                    poly = Poly3DCollection([verts], alpha=0.7)
+                    poly = Poly3DCollection([verts], alpha=0.5)
                     poly.set_edgecolor("dimgray")
                     poly.set_facecolor("lightgray")
                     ax.add_collection3d(poly)
@@ -134,14 +147,19 @@ class W:
             self.__draw_normals(ax, quadrants_indices)
         if render_planes:
             self.__draw_planes(ax, [0], [0])
+        if render_cones:
+            self.__draw_cone(ax, [0], [0])
         
         if render_points:
             points = np.array(POINTS)
-            ax.scatter(*points[0], c="black", s=25)
-            ax.scatter(*points[1], c="black", s=25)
+            ax.scatter(*points[0], c="red", s=25)
+            ax.scatter(*points[1], c="blue", s=25)
             ax.text(*points[0] + 0.5, "a", color="red", fontsize=12)
             ax.text(*points[1] + 0.5, "b", color="blue", fontsize=12)
-        
+
+            if proj:
+                self.__draw_projections(ax, origin=origin_proj)
+                
         ax.set_aspect('equal')
         ax.axis("off")
         if plot:
@@ -149,8 +167,130 @@ class W:
         else:
             return ax
         
+    def __draw_cone(self, ax: plt.Axes, quadrants: List, facets: List) -> None:
+        for i, q in enumerate(self.quadrants):
+            if i in quadrants:
+                for j, f in enumerate(q.facets):
+                    if j in facets:
+                        v1, v2, v3 = [v.to_numpy() for v in f.points]
+                        b1, b2, b3 = [b.to_numpy() for b in f.biorthogonal]
+                        
+                        ax.quiver(*CENTROID, *v1, color="black", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *v2, color="black", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *v3, color="black", linewidth=2, arrow_length_ratio=0.05)
+                        
+                        p = np.array(POINTS[0])
+                        
+                        mat = np.vstack([b1, b2, b3])
+                        a_star = np.dot(mat, p)
+
+                        ax.scatter(*a_star, c="green")
+                        ax.text(*a_star + 0.5, s="a*", color="red", fontsize=12)
+                        
+                        ax.quiver(*CENTROID, *b1 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *b2 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *b3 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
+
+    def __project_points(self) -> None:
+        a_translation, b_translation = self.__translate_points()
+        
+        a = np.array(POINTS[0])
+        a_translated = a_translation * a
+        
+        b = np.array(POINTS[1])
+        b_translated = b_translation * b
+        
+        for f in self.quadrants[0].facets:
+            b1, b2, b3 = [b.to_numpy() for b in f.biorthogonal]
+            
+            mat = np.vstack([b1, b2, b3])
+            a_star = np.dot(mat, a_translated)
+            b_star = np.dot(mat, b_translated)
+            self.projected_points.append((a_star, b_star))
+            
+    def __translate_points(self) -> Tuple[np.ndarray]:
+        a_translation = np.array([-1 if v < 0 else 1 for v in POINTS[0]])
+        b_translation = np.array([-1 if v < 0 else 1 for v in POINTS[1]])
+        
+        return (a_translation, b_translation)
+        
+    def __calc_biorthogonal(self, basis: np.ndarray) -> Tuple[Vec3]:
+        v1, v2, v3 = [v.to_numpy() for v in basis]
+        b1 = np.cross(v2, v3)
+        b2 = np.cross(v1, v3)
+        b3 = np.cross(v1, v2)
+        
+        b1 = b1 / np.dot(b1, v1)
+        b2 = b2 / np.dot(b2, v2)
+        b3 = b3 / np.dot(b3, v3)
+        
+        return (Vec3((b1[0], b1[1], b1[2])), 
+                Vec3((b2[0], b2[1], b2[2])), 
+                Vec3((b3[0], b3[1], b3[2])))
+    
+    def __draw_projections(self, ax: plt.Axes, origin: bool = False) -> None:
+        proj  = []
+        trans = []
+        found_face_vertices = []
+        
+        a_translation, b_translation = self.__translate_points()
+        
+        for i, p in enumerate(self.projected_points):
+            a, b = p
+            if all([True if v > 0 else False for v in a]):
+                proj.append(a)
+                trans.append(0)
+                found_face_vertices.append(self.quadrants[0].facets[i].points) 
+            if all([True if v > 0 else False for v in b]):
+                proj.append(b)
+                trans.append(1)
+                found_face_vertices.append(self.quadrants[0].facets[i].points)
+        
+        a_ind = 0 if trans[0] == 0 else 1
+        b_ind = 1 - a_ind
+        a, b = [np.array(v) for v in POINTS]
+        if not origin:
+            a = a * a_translation
+            b = b * b_translation
+            
+            bary_a = proj[a_ind] / np.sum(proj[a_ind])
+            bary_b = proj[b_ind] / np.sum(proj[b_ind])
+            
+            v1, v2, v3 = [v.to_numpy() for v in found_face_vertices[a_ind]]
+            projected_a = bary_a[0] * v1 + bary_a[1] * v2 + bary_a[2] * v3
+            v1, v2, v3 = [v.to_numpy() for v in found_face_vertices[b_ind]]
+            projected_b = bary_b[0] * v1 + bary_b[1] * v2 + bary_b[2] * v3
+ 
+            ax.scatter(*projected_a, c="red")
+            ax.text(*projected_a + 0.5, "a*", fontsize=12, c="red")
+            ax.scatter(*projected_b, c="blue")
+            ax.text(*projected_b + 1.5, "b*", fontsize=12, c="blue")
+            
+            ax.quiver(*projected_a, *a - projected_a, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
+            ax.scatter(*a, c="red")
+            ax.text(*a + 0.5, "~a", fontsize=12, c="red")
+
+            ax.quiver(*projected_b, *b - projected_b, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
+            ax.scatter(*b, c="blue")
+            ax.text(*b + 0.5, "~b", fontsize=12, c="blue")
+        else:
+            bary_a = proj[a_ind] / np.sum(proj[a_ind])
+            bary_b = proj[b_ind] / np.sum(proj[b_ind])
+            
+            v1, v2, v3 = [v.to_numpy() * a_translation for v in found_face_vertices[a_ind]]
+            projected_a = bary_a[0] * v1 + bary_a[1] * v2 + bary_a[2] * v3
+            v1, v2, v3 = [v.to_numpy() * b_translation for v in found_face_vertices[b_ind]]
+            projected_b = bary_b[0] * v1 + bary_b[1] * v2 + bary_b[2] * v3
+            
+            ax.scatter(*projected_a, c="red")
+            ax.text(*projected_a + 0.5, "a*", fontsize=12, c="red")
+            ax.scatter(*projected_b, c="blue")
+            ax.text(*projected_b + 1.5, "b*", fontsize=12, c="blue")
+            
+            ax.quiver(*projected_a, *a - projected_a, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
+            ax.quiver(*projected_b, *b - projected_b, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
+             
     def __draw_axis(self, ax: plt.Axes, label_axis=False) -> None:
-        origin = [0, 0, 0]
         axis_length = 20
         colors = ['red', 'green', 'blue']
         labels = ['X', 'Y', 'Z']
@@ -159,9 +299,9 @@ class W:
             direction = [0, 0, 0]
             direction[i] = axis_length
             neg_direction = [-d for d in direction]
-            ax.quiver(*origin, *neg_direction, color=colors[i], linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
+            ax.quiver(*CENTROID, *neg_direction, color=colors[i], linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
             
-            ax.quiver(*origin, *direction, color=colors[i], linewidth=2, arrow_length_ratio=0.1, alpha=0.8)
+            ax.quiver(*CENTROID, *direction, color=colors[i], linewidth=2, arrow_length_ratio=0.1, alpha=0.8)
             
             if label_axis:
                 label_pos = [0, 0, 0]
@@ -189,8 +329,7 @@ class W:
             arrow_length_ratio=0.5,
             linewidth=2
         )
-        
-    
+         
     def __draw_planes(self, ax: plt.Axes, quadrants=ALL_QUADRANTS_INDICES, facets=None) -> None:
         q_counter = 0
         f_counter = 0
@@ -210,18 +349,19 @@ class W:
                         f_counter += 1
                 q_counter += 1
 
-
     def dump_tex_tables(self, pth: str) -> None:
         pth2vertices  = os.path.join(pth, "vertices.tex")
         pth2allvertices  = os.path.join(pth, "all_vertices.tex")
         pth2uniquevertices  = os.path.join(pth, "uniq_vertices.tex")
         pth2facets = os.path.join(pth, "facets.tex")
         pth2quadrants = os.path.join(pth, "quadrants.tex")
+        pth2proj = os.path.join(pth, "proj.tex")
         
         self.__dump_base_vertices(pth2vertices)
         self.__dump_all_vertices(pth2allvertices)
         self.__dump_unique_vertices(pth2uniquevertices)
         self.__dump_facets(pth2facets)
+        self.__dump_proj(pth2proj)
     
     def __dump_base_vertices(self, pth: str) -> None:
         with open(pth, 'w+', encoding='utf-8') as f:
@@ -350,10 +490,57 @@ class W:
             f.write(r'    \end{subtable}' + '\n')
             f.write(r'    \caption{Правила построения граней в квадрантах}' + '\n')
             f.write(r'\end{table}' + '\n')
-    
-def main() -> None:
-    cover = W()
 
+    def __dump_proj(self, pth: str) -> None:
+        with open(pth, "w+", encoding='utf-8') as f:
+            f.write(r'\begin{table}[h]' + '\n')
+            f.write(r'    \centering' + '\n')
+            f.write(r'    \begin{subtable}{0.45\textwidth}' + '\n')
+            f.write(r'        \centering' + '\n')
+            f.write(r'        \begin{tabular}{c||cccc}' + '\n')
+            f.write(r'            \toprule' + '\n')
+            f.write(r'            \textbf{Грань} & \textbf{$x_1$} & \textbf{$x_2$} & \textbf{$x_3$} & \textbf{$\lambda$} \\'+ '\n')
+            f.write(r'            \midrule' + '\n') 
+            
+            a, b = [np.array(p) for p in POINTS]
+            a_translation, b_translation = self.__translate_points()
+            a = a * a_translation
+            b = b * b_translation
+            
+            for i, (p1, p2) in enumerate(self.projected_points):
+                basis = [p.to_numpy() for p in self.facets[i].points]
+                
+                bary_a = p1 / np.sum(p1)
+                bary_b = p2 / np.sum(p2)
+                
+                projected_a = bary_a[0] * basis[0] + bary_a[1] * basis[1] + bary_a[2] * basis[2] 
+                projected_b = bary_b[0] * basis[0] + bary_b[1] * basis[1] + bary_b[2] * basis[2]
+                
+                x, y, z = p1
+                x1, y1, z1 = p2
+                
+                valid_a = all(v > 0 for v in p1)
+                valid_b = all(v > 0 for v in p2)
+                
+                row_color_a = r'\rowcolor{green!20}' if valid_a else ''
+                row_color_b = r'\rowcolor{green!20}' if valid_b else ''
+                
+                f.write(f"            {row_color_a}\n")
+                f.write(f"            $a_{{{i+1}}}$ & {x:.2f} & {y:.2f} & {z:.2f} & {np.sum(p1):.2f} \\\\\n")
+                
+                f.write(f"            {row_color_b}\n")
+                f.write(f"            $b_{{{i+1}}}$ & {x1:.2f} & {y1:.2f} & {z1:.2f} & {np.sum(p1):.2f} \\\\\n")
+                
+                f.write(r'            \midrule' + '\n')
+                    
+            f.write(r'            \bottomrule' + '\n')
+            f.write(r'        \end{tabular}' + '\n')
+            f.write(r'    \end{subtable}' + '\n')
+            f.write(r'    \caption{Точки в биортогональном базисе в первом квадранте}' + '\n')
+            f.write(r'\end{table}' + '\n')
+            
+def generate_tex(cover: W) -> None:
+    
     ax = cover.draw_W(quadrants_indices=[0], render_normals=False, render_planes=False, render_points=False, plot=False)
     
     ax.view_init(10, 40, 0)
@@ -373,8 +560,25 @@ def main() -> None:
     ax.set_zlim(0, 15)
     plt.savefig(os.path.join(IMAGES_PTH, "polytope-plane.png"), dpi=1000, bbox_inches='tight')
     
+    ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, render_points=True, render_cones=True, render_axis=False, render_planes=False, render_normals=False, plot=False)
+    ax.view_init(20, 70, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-cone.png"), dpi=1000, bbox_inches='tight')
+    
+    ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, proj=True, render_points=True, render_cones=False, render_axis=True, render_planes=False, render_normals=False, plot=False)
+    ax.view_init(20, -20, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-posproj.png"), dpi=1000, bbox_inches='tight')
+    
+    ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, proj=True, origin_proj=True, render_points=True, render_cones=False, render_axis=True, render_planes=False, render_normals=False, plot=False)
+    ax.view_init(20, 25, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-originproj.png"), dpi=1000, bbox_inches='tight')
     
     cover.dump_tex_tables(REPORT_PTH)
+    
+def main() -> None:
+    cover = W()
+    generate_tex(cover)
+    
+    # cover.draw_W(render_normals=False, render_planes=False)
 
 
 if __name__ == "__main__":
