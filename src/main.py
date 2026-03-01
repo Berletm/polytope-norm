@@ -9,14 +9,35 @@ import os
 REPORT_PTH = R"../report"
 IMAGES_PTH = R"../report/images"
 
+FRACTIONS = [(148, 29), (295, 32), (79, 1)]
+
 # var2
+# VERTICES = [
+#     (5, 3, 0),      # v1
+#     (3, 0, 6),      # v2
+#     (0, 2, 7),      # v3 
+#     (33/5, 0, 0),   # v4
+#     (0, 171/32, 0), # v5
+#     (0, 0, 107/13), # v6 
+# ]
+
+# # var13
+# VERTICES = [
+#     (8, 4, 0),
+#     (5, 0, 6),
+#     (0, 6, 8),
+#     (FRACTIONS[0][0] / FRACTIONS[0][1], 0, 0),
+#     (0, FRACTIONS[1][0]/FRACTIONS[1][1], 0),
+#     (0, 0, FRACTIONS[2][0]/FRACTIONS[2][1])
+# ]
+
 VERTICES = [
-    (5, 3, 0),      # v1
-    (3, 0, 6),      # v2
-    (0, 2, 7),      # v3 
-    (33/5, 0, 0),   # v4
-    (0, 171/32, 0), # v5
-    (0, 0, 107/13), # v6 
+    (3, 4, 0),
+    (5, 0, 6),
+    (0, 9, 7),
+    (148/29, 0, 0),
+    (0, 295/32, 0),
+    (0, 0, 79)
 ]
 
 QUADRANTS = [
@@ -39,9 +60,15 @@ FACETS = [
     (2, 3, 6)
 ]
 
+# POINTS = [
+    
+#     (7, -6, 9), # a
+#     (-6, 6, 7)  # b
+# ]
+
 POINTS = [
-    (7, -6, 9), # a
-    (-6, 6, 7),  # b
+    (5, -6, 9),
+    (-8, 7, 6)
 ]
 
 CENTROID = np.array([0, 0, 0], dtype=np.float32)
@@ -129,16 +156,16 @@ class W:
         fig = plt.figure()
         ax  = plt.axes(projection="3d")
         
-        if render_axis:
+        if False:
             self.__draw_axis(ax)
                     
         for i, q in enumerate(self.quadrants):
             if i in quadrants_indices:
                 for f in q.facets:
                     verts = [p.to_list() for p in f.points]
-                    poly = Poly3DCollection([verts], alpha=0.5)
-                    poly.set_edgecolor("dimgray")
-                    poly.set_facecolor("lightgray")
+                    poly = Poly3DCollection([verts], alpha=0.55)
+                    poly.set_facecolor("#e2d5c3") 
+                    poly.set_edgecolor("#8d5524")
                     ax.add_collection3d(poly)
             
                     verts = np.array(verts)
@@ -152,15 +179,15 @@ class W:
         
         if render_points:
             points = np.array(POINTS)
-            ax.scatter(*points[0], c="red", s=25)
-            ax.scatter(*points[1], c="blue", s=25)
-            ax.text(*points[0] + 0.5, "a", color="red", fontsize=12)
-            ax.text(*points[1] + 0.5, "b", color="blue", fontsize=12)
+            ax.scatter(*points[0], c="#f472b6", s=25)
+            ax.scatter(*points[1], c="#60a5fa", s=25)
+            ax.text(*points[0] + 0.5, "a", color="#f472b6", fontsize=12)
+            ax.text(*points[1] + 0.5, "b", color="#60a5fa", fontsize=12)
 
             if proj:
                 self.__draw_projections(ax, origin=origin_proj)
                 
-        ax.set_aspect('equal')
+        # ax.set_aspect('equal')
         ax.axis("off")
         if plot:
             plt.show()
@@ -181,14 +208,14 @@ class W:
                         
                         p = np.array(POINTS[0])
                         
-                        a_star = [np.dot(b1, p), np.dot(b2, p), np.dot(b3, p)]
+                        a_star = np.array([np.dot(b1, p), np.dot(b2, p), np.dot(b3, p)])
 
-                        ax.scatter(*a_star, c="green")
-                        ax.text(*a_star + 0.5, s="a*", color="red", fontsize=12)
+                        ax.scatter(*a_star, c="#ccfbf1")
+                        ax.text(*a_star + 0.5, s="a*", color="#ccfbf1", fontsize=12)
                         
-                        ax.quiver(*CENTROID, *b1 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
-                        ax.quiver(*CENTROID, *b2 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
-                        ax.quiver(*CENTROID, *b3 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *b1 * 10, color="#f472b6", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *b2 * 10, color="#f472b6", linewidth=2, arrow_length_ratio=0.05)
+                        ax.quiver(*CENTROID, *b3 * 10, color="#f472b6", linewidth=2, arrow_length_ratio=0.05)
 
     def __project_points(self) -> None:
         a = np.array(POINTS[0])
@@ -232,21 +259,21 @@ class W:
             b_shifted = b / l_b
                 
             ax.quiver(*a_shifted, *a - a_shifted, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
-            ax.scatter(*a, c="red")
-            ax.text(*a + 0.5, "~a", fontsize=12, c="red")
+            ax.scatter(*a, c="#f472b6")
+            ax.text(*a + 0.5, "~a", fontsize=12, c="#f472b6")
 
             ax.quiver(*b_shifted, *b - b_shifted, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
-            ax.scatter(*b, c="blue")
-            ax.text(*b + 0.5, "~b", fontsize=12, c="blue")
+            ax.scatter(*b, c="#60a5fa")
+            ax.text(*b + 0.5, "~b", fontsize=12, c="#60a5fa")
             
-            ax.scatter(*a_shifted, c="red")
+            ax.scatter(*a_shifted, c="#f472b6")
             a_shifted[2] += 1.0
-            ax.text(*a_shifted + 0.5, "a*", fontsize=12, c="red")
+            ax.text(*a_shifted + 0.5, "a*", fontsize=12, c="#f472b6")
             
-            ax.scatter(*b_shifted, c="blue")
+            ax.scatter(*b_shifted, c="#60a5fa")
             b_shifted[2] -= 1.0
             b_shifted[1] += 1.0
-            ax.text(*b_shifted, "b*", fontsize=12, c="blue")    
+            ax.text(*b_shifted, "b*", fontsize=12, c="#60a5fa")    
         else:
             a, b = [np.array(v) for v in POINTS]
             
@@ -259,13 +286,13 @@ class W:
             ax.quiver(*a_shifted, *a - a_shifted, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
             ax.quiver(*b_shifted, *b - b_shifted, color="black", linewidth=2, arrow_length_ratio=0.0, alpha=0.8)
              
-            ax.scatter(*a_shifted, c="red")
+            ax.scatter(*a_shifted, c="#f472b6")
             a_shifted[2] += 1.0
             a_shifted[1] -= 0.5
-            ax.text(*a_shifted, "a*", fontsize=12, c="red")
-            ax.scatter(*b_shifted, c="blue")
+            ax.text(*a_shifted, "a*", fontsize=12, c="#f472b6")
+            ax.scatter(*b_shifted, c="#60a5fa")
             b_shifted[2] += 1.0
-            ax.text(*b_shifted, "b*", fontsize=12, c="blue")
+            ax.text(*b_shifted, "b*", fontsize=12, c="#60a5fa")
             
     def __draw_axis(self, ax: plt.Axes, label_axis=False) -> None:
         axis_length = 20
@@ -302,7 +329,7 @@ class W:
             centers[:, 0], centers[:, 1], centers[:, 2],
             vectors[:, 0], vectors[:, 1], vectors[:, 2],
             length=1.0,
-            color="black",
+            color="#1e293b",
             arrow_length_ratio=0.5,
             linewidth=2
         )
@@ -322,7 +349,7 @@ class W:
                         X, Y = np.meshgrid(x, y)
                         
                         Z = -(nx * X + ny * Y + d) / nz
-                        ax.plot_surface(X, Y, Z, color="gray", alpha=0.5)
+                        ax.plot_surface(X, Y, Z, color="#1e293b", alpha=0.5)
                         f_counter += 1
                 q_counter += 1
 
@@ -351,9 +378,9 @@ class W:
             
             for i, row in enumerate(self.base_vertices, 1):
                 x, y, z = row
-                x = r"$\frac{33}{5}$" if abs(float(x) - float(33/5)) < 1e-9 else x
-                y = r"$\frac{171}{32}$" if abs(float(y) - float(171/32)) < 1e-9 else y
-                z = r"$\frac{107}{13}$" if abs(float(z) - float(107/13)) < 1e-9 else z
+                x = self.__fraction_format(x, FRACTIONS[0])
+                y = self.__fraction_format(y, FRACTIONS[1])
+                z = self.__fraction_format(z, FRACTIONS[2])
                 line = f"        {i} & {x} & {y} & {z} \\\\\n"
                 f.write(line)
             
@@ -362,7 +389,8 @@ class W:
             f.write(r'    \caption{Вершины первого квадранта}' + '\n')
             f.write(r'\end{table}' + '\n')
     
-    def __fraction_format(self, value: float, numerator:int = 33, denominator:int = 5, tol: float = 1e-9) -> str:
+    def __fraction_format(self, value: float, frac: Tuple, tol: float = 1e-9) -> str:
+        numerator, denominator = frac
         target = numerator / denominator
         if abs(value - target) < tol:
             return r"$\frac{" + str(numerator) + "}{" + str(denominator) + "}$"
@@ -387,9 +415,9 @@ class W:
                 for j in range(l, r, 1):
                     v = self.vertices[j]
                     
-                    x = self.__fraction_format(v.x, 33, 5)
-                    y = self.__fraction_format(v.y, 171, 32)
-                    z = self.__fraction_format(v.z, 107, 13)
+                    x = self.__fraction_format(v.x, FRACTIONS[0])
+                    y = self.__fraction_format(v.y, FRACTIONS[1])
+                    z = self.__fraction_format(v.z, FRACTIONS[2])
                     
                     row = f"            {j + 1} & {x} & {y} & {z} \\\\\n"
                     f.write(row)
@@ -409,9 +437,9 @@ class W:
         seen_coords = set()
         
         for v in self.vertices:
-            x = self.__fraction_format(v.x, 33, 5)
-            y = self.__fraction_format(v.y, 171, 32)
-            z = self.__fraction_format(v.z, 107, 13)
+            x = self.__fraction_format(v.x, FRACTIONS[0])
+            y = self.__fraction_format(v.y, FRACTIONS[1])
+            z = self.__fraction_format(v.z, FRACTIONS[2])
             
             if (x, y, z) not in seen_coords:
                 seen_coords.add((x, y, z))
@@ -525,39 +553,40 @@ def generate_tex(cover: W) -> None:
     ax = cover.draw_W(quadrants_indices=[0], render_normals=False, render_planes=False, render_points=False, plot=False)
     
     ax.view_init(10, 40, 0)
-    plt.savefig(os.path.join(IMAGES_PTH, "quadrant1.png"), dpi=1000, bbox_inches='tight')
+    plt.savefig(os.path.join(IMAGES_PTH, "quadrant1.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(render_normals=False, render_planes=False, render_points=False, plot=False)
     ax.view_init(25, 35, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(render_normals=True, render_planes=False, render_points=False, plot=False)
-    ax.view_init(0, 45, 0)
-    plt.savefig(os.path.join(IMAGES_PTH, "polytope-normals.png"), dpi=1000, bbox_inches='tight')
+    ax.view_init(10, 45, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-normals.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(render_normals=True, render_planes=True, render_points=False, plot=False)
     ax.view_init(10, 135, 0)
     ax.set_xlim(0, 15)
     ax.set_ylim(0, 15)
     ax.set_zlim(0, 15)
-    plt.savefig(os.path.join(IMAGES_PTH, "polytope-plane.png"), dpi=1000, bbox_inches='tight')
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-plane.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, render_points=True, render_cones=True, render_axis=False, render_planes=False, render_normals=False, plot=False)
-    ax.view_init(20, 70, 0)
-    plt.savefig(os.path.join(IMAGES_PTH, "polytope-cone.png"), dpi=1000, bbox_inches='tight')
+    ax.view_init(20, 45, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-cone.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, proj=True, render_points=True, render_cones=False, render_axis=True, render_planes=False, render_normals=False, plot=False)
-    ax.view_init(20, -20, 0)
-    plt.savefig(os.path.join(IMAGES_PTH, "polytope-posproj.png"), dpi=1000, bbox_inches='tight')
+    ax.view_init(20, 0, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-posproj.png"), dpi=500, bbox_inches='tight')
     
     ax = cover.draw_W(quadrants_indices=ALL_QUADRANTS_INDICES, proj=True, origin_proj=True, render_points=True, render_cones=False, render_axis=True, render_planes=False, render_normals=False, plot=False)
-    ax.view_init(20, 25, 0)
-    plt.savefig(os.path.join(IMAGES_PTH, "polytope-originproj.png"), dpi=1000, bbox_inches='tight')
+    ax.view_init(20, 75, 0)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope-originproj.png"), dpi=500, bbox_inches='tight')
     
 def main() -> None:
     cover = W()
     generate_tex(cover)
     
-    # cover.draw_W(render_normals=False, render_planes=False)
+    # cover.draw_W(render_normals=True, render_planes=False, proj=False)
 
 
 if __name__ == "__main__":
