@@ -181,10 +181,10 @@ class W:
                         
                         p = np.array(POINTS[0])
                         
-                        a_star = [np.dot(b1, p), np.dot(b2, p), np.dot(b3, p)]
+                        a_star = np.array([np.dot(b1, p), np.dot(b2, p), np.dot(b3, p)])
 
                         ax.scatter(*a_star, c="green")
-                        ax.text(*a_star + 0.5, s="a*", color="red", fontsize=12)
+                        ax.text(*(a_star + 0.5), s="a*", color="red", fontsize=12)
                         
                         ax.quiver(*CENTROID, *b1 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
                         ax.quiver(*CENTROID, *b2 * 10, color="red", linewidth=2, arrow_length_ratio=0.05)
@@ -333,12 +333,14 @@ class W:
         pth2facets = os.path.join(pth, "facets.tex")
         pth2quadrants = os.path.join(pth, "quadrants.tex")
         pth2proj = os.path.join(pth, "proj.tex")
+        pth2borth = os.path.join(pth, "basis.tex")
         
         self.__dump_base_vertices(pth2vertices)
         self.__dump_all_vertices(pth2allvertices)
         self.__dump_unique_vertices(pth2uniquevertices)
         self.__dump_facets(pth2facets)
         self.__dump_proj(pth2proj)
+        self.__dump_basis(pth2borth)
     
     def __dump_base_vertices(self, pth: str) -> None:
         with open(pth, 'w+', encoding='utf-8') as f:
@@ -518,12 +520,41 @@ class W:
             f.write(r'    \end{subtable}' + '\n')
             f.write(r'    \caption{Точки в биортогональном базисе в первом квадранте}' + '\n')
             f.write(r'\end{table}' + '\n')
+    
+    def __dump_basis(self, pth: str) -> None:
+        with open(pth, "w+", encoding='utf-8') as f:
+            f.write(r'\begin{table}[h]' + '\n')
+            f.write(r'    \centering' + '\n')
+            f.write(r'    \begin{subtable}{0.45\textwidth}' + '\n')
+            f.write(r'        \centering' + '\n')
+            f.write(r'        \begin{tabular}{c||ccc}' + '\n')
+            f.write(r'            \toprule' + '\n')
+            f.write(r'            \textbf{Грань} & \textbf{$b_x$} & \textbf{$b_y$} & \textbf{$b_z$} \\'+ '\n')
+            f.write(r'            \midrule' + '\n') 
             
+            for i, facet in enumerate(self.quadrants[0].facets):
+                for b in facet.biorthogonal:
+                    x = b.x if b.x != 0.0 else abs(b.x)
+                    y = b.y if b.y != 0.0 else abs(b.y)
+                    z = b.z if b.z != 0.0 else abs(b.z)
+                    f.write(f"            ${{v_{i+1}}}$ & {x:.2f} & {y:.2f} & {z:.2f} \\\\\n")
+                    
+                f.write(r'            \midrule' + '\n')
+                    
+            f.write(r'            \bottomrule' + '\n')
+            f.write(r'        \end{tabular}' + '\n')
+            f.write(r'    \end{subtable}' + '\n')
+            f.write(r'    \caption{Биортогональный базис в первом квадранте}' + '\n')
+            f.write(r'\end{table}' + '\n')
+            
+     
 def generate_tex(cover: W) -> None:
     cover.dump_tex_tables(REPORT_PTH)
     
-    ax = cover.draw_W(quadrants_indices=[0], render_normals=False, render_planes=False, render_points=False, plot=False)
+    ax = cover.draw_W(render_normals=False, render_planes=False, render_points=False, plot=False)
+    plt.savefig(os.path.join(IMAGES_PTH, "polytope.png"), dpi=1000, bbox_inches='tight')
     
+    ax = cover.draw_W(quadrants_indices=[0], render_normals=False, render_planes=False, render_points=False, plot=False)
     ax.view_init(10, 40, 0)
     plt.savefig(os.path.join(IMAGES_PTH, "quadrant1.png"), dpi=1000, bbox_inches='tight')
     
